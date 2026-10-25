@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Study Recording Expiry Tracker</title>
+<style>
+:root{--bg:#f4f5fb;--card:#fff;--ink:#1d2040;--mut:#5a5e82;--ac:#4f46c8;--acl:#ecebfc;--bd:#dcdff0;--red:#a8211a;--redl:#fdeceb;--amb:#7a4f00;--ambl:#fff3d6;--grn:#17653a;--grnl:#e3f5ea}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1180px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:1.7rem;margin:0;letter-spacing:-.02em}h2{font-size:1.15rem;margin:0 0 12px}h3{margin:0;font-size:1.02rem}
+.mut{color:var(--mut);font-size:.9rem}
+:focus-visible{outline:3px solid #1f1fd1;outline-offset:2px}
+button,input,select,textarea{font:inherit;color:inherit}
+button,.btn{min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid var(--bd);background:#fff;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+button.pri{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
+button.dng{color:var(--red);border-color:#e8b9b5}
+button.sm,.btn.sm{min-height:38px;padding:4px 10px;font-size:.9rem}
+input,select,textarea{width:100%;min-height:44px;padding:8px 10px;border:1px solid #b9bddb;border-radius:10px;background:#fff}
+label{display:block;font-size:.9rem;font-weight:600}label input,label select,label textarea{margin-top:4px;font-weight:400}
+label.cb{display:flex;gap:8px;align-items:center;font-weight:400}label.cb input{width:22px;min-height:22px;margin:0}
+.head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:18px;padding:16px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.stat b{display:block;font-size:1.7rem;line-height:1.2}
+.bar{height:12px;background:var(--acl);border-radius:8px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ac)}
+.alerts{display:grid;gap:8px;margin-bottom:14px}
+.al{padding:10px 14px;border-radius:12px;border:1px solid;font-size:.95rem}
+.al.bad{background:var(--redl);color:var(--red);border-color:#e8b9b5}.al.warn{background:var(--ambl);color:var(--amb);border-color:#ecd391}.al.info{background:var(--acl);color:#2f2a8c;border-color:#c9c6f2}
+nav{display:flex;gap:6px;margin:16px 0;flex-wrap:wrap}nav button[aria-selected=true]{background:var(--ac);color:#fff;border-color:var(--ac)}
+.tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.rc{display:flex;flex-direction:column;gap:8px}.rc.done{opacity:.85}
+.badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.82rem;font-weight:600;background:var(--acl);color:#2f2a8c;margin:0 4px 4px 0}
+.badge.bad{background:var(--redl);color:var(--red)}.badge.warn{background:var(--ambl);color:var(--amb)}.badge.ok{background:var(--grnl);color:var(--grn)}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:820px}th,td{padding:10px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:top;font-size:.93rem}
+details{border:1px solid var(--bd);border-radius:12px;padding:8px 12px}summary{cursor:pointer;font-weight:600;min-height:28px}
+.ck{display:grid;gap:6px;margin-top:8px}.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.empty{text-align:center;padding:36px 16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+dialog{border:0;border-radius:18px;padding:20px;width:min(640px,94vw);max-height:92vh;color:var(--ink)}dialog::backdrop{background:rgba(20,22,50,.5)}
+.err{color:var(--red);font-weight:600;min-height:1.3em}
+#toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#1d2040;color:#fff;padding:12px 18px;border-radius:12px;max-width:92vw;display:none;z-index:9}
+.pl input{min-width:76px}.pl td{min-width:90px}
+[hidden]{display:none!important}
+@media(max-width:640px){.row2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<header class="head">
+ <div><h1>Study Recording Expiry Tracker</h1><div class="mut">Capture lessons. Beat deadlines. Master every topic.</div></div>
+ <div class="mut" id="clock" aria-live="off"></div>
+</header>
+<div id="warn" class="al warn" hidden></div>
+<section class="stats" id="stats" aria-label="Statistics"></section>
+<div class="card" style="margin-bottom:14px"><b>Overall completion: <span id="pct">0%</span></b><div class="bar" role="progressbar" aria-label="Overall completion" id="pbar"><i style="width:0"></i></div></div>
+<section class="alerts" id="alerts" aria-live="polite"></section>
+<nav role="tablist">
+ <button role="tab" data-tab="rec" aria-selected="true">Recordings</button>
+ <button role="tab" data-tab="plan" aria-selected="false">Weekly planner</button>
+ <button role="tab" data-tab="set" aria-selected="false">Settings &amp; data</button>
+</nav>
+
+<section id="tab-rec">
+ <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px"><button class="pri" id="addBtn">+ Add recording</button><button id="demoRm" hidden>Remove demo recordings</button></div>
+ <div class="tools card">
+  <label>Search title or notes<input id="q" type="search" placeholder="e.g. KBAT, Tingkatan 4"></label>
+  <label>Subject<select id="fSub"></select></label>
+  <label>Status<select id="fSt"><option value="">All</option><option>Not started</option><option>In progress</option><option>Completed</option></select></label>
+  <label>Priority<select id="fPr"><option value="">All</option><option>Urgent</option><option>High</option><option>Normal</option><option>Low</option></select></label>
+  <label>Urgency<select id="fUr"><option value="">All</option><option value="exp">Expired</option><option value="24">Within 24 hours</option><option value="72">Within 3 days</option><option value="168">Within 7 days</option><option value="later">Later than 7 days</option></select></label>
+  <label>Sort by<select id="sort"><option value="e1">Earliest expiry</option><option value="e2">Latest expiry</option><option value="pr">Priority</option><option value="su">Subject</option><option value="st">Status</option></select></label>
+  <label>View<select id="vw"><option value="cards">Card view</option><option value="table">Table view</option></select></label>
+ </div>
+ <div id="list"></div>
+</section>
+
+<section id="tab-plan" hidden>
+ <div class="card">
+  <h2>Weekly study planner</h2>
+  <p class="mut">Plans are suggestions you can edit. Fixed blocks: Monday 9–10 PM extra class (never scheduled), plus unavailable days and dates in Settings (28–29 Nov 2026 band competition by default). Recordings expiring within 7 days are scheduled first, and practice time follows each lesson.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+   <button class="pri" id="genBtn">Generate plan</button>
+   <label style="min-width:200px">Add session for<select id="addSel"></select></label><button id="addSess">Add session</button>
+   <button id="wkPrev">← Previous week</button><button id="wkNext">Next week →</button>
+  </div>
+  <div id="planWarn" style="margin-top:12px"></div>
+  <h3 id="wkTitle" style="margin:14px 0 8px"></h3>
+  <div class="tw"><table class="pl"><thead><tr><th>Recording</th><th>Date</th><th>Start</th><th>End</th><th>Viewing (min)</th><th>Practice (min)</th><th>Deadline</th><th></th></tr></thead><tbody id="planRows"></tbody></table></div>
+  <p class="mut" id="planNone"></p>
+ </div>
+</section>
+
+<section id="tab-set" hidden>
+ <div class="card" style="margin-bottom:14px"><h2>Study settings</h2>
+  <div class="grid2">
+   <label>Daily available study minutes<input type="number" min="15" max="720" data-s="daily"></label>
+   <label>Preferred study start time<input type="time" data-s="start"></label>
+   <label>Break between sessions (min)<input type="number" min="0" max="60" data-s="brk"></label>
+   <label>Maximum focused session (min)<input type="number" min="15" max="180" data-s="maxSess"></label>
+   <label>Practice time (% of viewing time)<input type="number" min="0" max="200" data-s="practice"></label>
+   <label>Mastery benchmark (% on fresh questions)<input type="number" min="1" max="100" data-s="bench"></label>
+  </div>
+  <fieldset style="margin:14px 0;border:1px solid var(--bd);border-radius:12px"><legend>Days unavailable (school or band)</legend><div id="offDays" class="grid2"></div></fieldset>
+  <label>Unavailable dates (YYYY-MM-DD, separated by commas or new lines)<textarea data-s="offDates" rows="3"></textarea></label>
+  <p class="mut">Suggested benchmark: 85–90% on fresh questions. Check retention separately with a retest 3–7 days later.</p>
+ </div>
+ <div class="card" style="margin-bottom:14px"><h2>Browser notifications</h2>
+  <p class="mut">Notifications only appear while this page is open in a browser tab. They cannot run when the browser is closed. In-app alerts always work, even if notifications are blocked or unsupported.</p>
+  <button id="notiBtn">Enable browser notifications</button> <span class="mut" id="notiState"></span>
+ </div>
+ <div class="card"><h2>Your data</h2>
+  <p class="mut">Data is saved in this browser only. Export a JSON backup regularly.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pri" id="exJ">Export JSON</button><button id="exC">Export CSV</button><button id="imB">Import JSON</button><input type="file" id="imF" accept=".json,application/json" hidden><button class="dng" id="rst">Reset all data</button></div>
+ </div>
+</section>
+</main>
+
+<dialog id="dlgF"><form id="fm" novalidate>
+ <h2 id="fTitle">Add recording</h2><input type="hidden" id="fId">
+ <div class="grid2">
+  <label>Subject<select id="sub" required></select></label>
+  <label>Recording or chapter name *<input id="ti" required maxlength="200"></label>
+  <label>Recording URL (optional)<input id="ur" type="url" placeholder="https://"></label>
+  <label>Expiry date *<input id="ed" type="date" required></label>
+  <label>Expiry time (optional, default 11:59 PM)<input id="et" type="time"></label>
+  <label>Duration (minutes)<input id="du" type="number" min="1" step="1"></label>
+  <label>Estimated viewing time (minutes)<input id="vi" type="number" min="1" step="1"></label>
+  <label>Status<select id="st"><option>Not started</option><option>In progress</option><option>Completed</option></select></label>
+  <label>Priority<select id="pr"><option value="">Auto (use suggestion)</option><option>Urgent</option><option>High</option><option>Normal</option><option>Low</option></select></label>
+ </div>
+ <div class="grid2" style="margin:10px 0"><label class="cb"><input type="checkbox" id="fo"> Foundational topic</label><label class="cb"><input type="checkbox" id="di"> Difficult topic for me</label></div>
+ <label>Notes<textarea id="no" rows="4" maxlength="3000"></textarea></label>
+ <div id="sejHint" hidden style="margin-top:6px"><span class="mut">Sejarah: record chapters, events, key figures, dates, causes and effects, essay practice and KBAT questions.</span> <button type="button" class="sm" id="sejTpl">Insert Sejarah note template</button></div>
+ <p class="err" id="fErr" role="alert"></p>
+ <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="fCancel">Cancel</button><button class="pri" id="fSave">Save recording</button></div>
+</form></dialog>
+
+<dialog id="dlgC"><form method="dialog"><p id="cMsg"></p><div style="display:flex;gap:8px;justify-content:flex-end"><button value="cancel">Cancel</button><button class="pri dng" value="ok" id="cOk">Confirm</button></div></form></dialog>
+<div id="toast" role="status"></div>
+
+<script>
+"use strict";
+/* ===== Constants & state ===== */
+const SUBJECTS=["Add Maths","Maths","Physics","Chemistry","Biology","Computer Science","Bahasa Melayu","Sejarah"];
+const PRI=["Urgent","High","Normal","Low"],STAT=["Not started","In progress","Completed"];
+const CK=["Recording watched","Main ideas recalled without notes","Practice questions attempted","Answers corrected","Topic retested after 3–7 days"];
+const SEJ_TPL="Chapter/Bab:\nKey events:\nKey figures:\nImportant dates:\nCauses:\nEffects:\nEssay practice:\nKBAT questions:\n";
+const KEY="recordingTracker.v1";
+const DEF={daily:120,start:"16:00",brk:10,maxSess:50,practice:40,bench:85,offDays:[],offDates:["2026-11-28","2026-11-29"]};
+let S={recs:[],plan:[],set:{...DEF},view:"cards"};
+let saveFail=false,wkOff=0;const openIds=new Set();
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+
+/* ===== Helpers ===== */
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad=n=>String(n).padStart(2,"0");
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const pdt=s=>{const m=/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)$/.exec(s||"");if(!m)return null;const d=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]);return isNaN(d)?null:d};
+const pday=s=>{const m=/^(\d{4})-(\d\d)-(\d\d)$/.exec(s||"");if(!m)return null;const d=new Date(+m[1],m[2]-1,+m[3]);return isNaN(d)?null:d};
+const hm=m=>`${pad(Math.floor(m/60)%24)}:${pad(m%60)}`;
+const tmin=s=>{const m=/^(\d\d):(\d\d)$/.exec(s||"");return m?+m[1]*60+ +m[2]:null};
+const fdt=d=>d?d.toLocaleString("en-MY",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit"}):"Invalid date";
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const posInt=v=>{const n=parseInt(v,10);return n>0?n:null};
+function cdown(ms){if(ms<=0)return"Expired";const s=Math.floor(ms/1e3),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+"d ":"")+(d||h?h+"h ":"")+m+"m "+pad(s%60)+"s"}
+function toast(t){const e=$("#toast");e.textContent=t;e.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display="none",4500)}
+function ask(msg,ok){return new Promise(res=>{const d=$("#dlgC");$("#cMsg").textContent=msg;$("#cOk").textContent=ok||"Confirm";d.returnValue="";d.onclose=()=>res(d.returnValue==="ok");d.showModal()})}
+const isOff=d=>S.set.offDays.includes(d.getDay())||S.set.offDates.includes(ymd(d));
+
+/* ===== Storage ===== */
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(S));saveFail=false}catch(e){saveFail=true}
+ const w=$("#warn");w.hidden=!saveFail;if(saveFail)w.textContent="Warning: this browser blocked saving (private mode or full storage). Your changes will be lost on refresh. Use Settings & data → Export JSON now to keep a backup."}
+function norm(o){o=o||{};const c=Array.isArray(o.chk)?o.chk.slice(0,5).map(Boolean):[];while(c.length<5)c.push(false);
+ const sc=o.score===""||o.score==null?"":Math.min(100,Math.max(0,Number(o.score)));
+ return{id:String(o.id||uid()),subject:SUBJECTS.includes(o.subject)?o.subject:"Maths",title:String(o.title||"Untitled").slice(0,200),url:String(o.url||""),
+ expiry:pdt(o.expiry)?o.expiry:"",dur:posInt(o.dur),view:posInt(o.view),status:STAT.includes(o.status)?o.status:"Not started",
+ priority:PRI.includes(o.priority)?o.priority:"",found:!!o.found,diff:!!o.diff,notes:String(o.notes||"").slice(0,3000),demo:!!o.demo,
+ chk:c,score:isNaN(sc)?"":sc,retest:pday(o.retest)?o.retest:""}}
+function normSet(s){s=s||{};const n=(v,d,lo,hi)=>{v=Number(v);return isFinite(v)&&v>=lo&&v<=hi?Math.round(v):d};
+ return{daily:n(s.daily,DEF.daily,15,720),start:tmin(s.start)!=null?s.start:DEF.start,brk:n(s.brk,DEF.brk,0,60),maxSess:n(s.maxSess,DEF.maxSess,15,180),
+ practice:n(s.practice,DEF.practice,0,200),bench:n(s.bench,DEF.bench,1,100),offDays:(Array.isArray(s.offDays)?s.offDays:[]).filter(x=>x>=0&&x<=6),
+ offDates:(Array.isArray(s.offDates)?s.offDates:DEF.offDates).filter(x=>pday(x))}}
+function normPlan(p){return(Array.isArray(p)?p:[]).filter(x=>x&&pday(x.date)&&x.start>=0).map(x=>({id:String(x.id||uid()),recId:String(x.recId),date:x.date,start:Math.round(x.start),vm:Math.max(0,+x.vm||0),pm:Math.max(0,+x.pm||0)}))}
+function load(){try{const j=JSON.parse(localStorage.getItem(KEY)||"null");if(j)apply(j)}catch(e){saveFail=true}}
+function apply(j){S.recs=(Array.isArray(j.recs)?j.recs:[]).map(norm);S.set=normSet(j.set);S.plan=normPlan(j.plan).filter(p=>S.recs.some(r=>r.id===p.recId));S.view=j.view==="table"?"table":"cards"}
+
+/* ===== Analysis: urgency + smart priority ===== */
+function an(r,now=new Date()){
+ const e=pdt(r.expiry),done=r.status==="Completed",need=r.view||r.dur||30,total=Math.round(need*(1+S.set.practice/100));
+ if(!e)return{e:null,label:"Invalid date",cls:"bad",sug:"Normal",eff:r.priority||"Normal",need,total,h:0,ms:0,done,reason:"Expiry date is invalid. Edit this recording."};
+ const ms=e-now,h=ms/36e5;let label,cls="";
+ if(done){label="Completed";cls="ok"}else if(ms<=0){label="Expired";cls="bad"}
+ else if(ymd(e)===ymd(now)){label="Due today";cls="bad"}else if(h<=24){label="Due within 24 hours";cls="bad"}
+ else{const dd=Math.ceil(h/24);label=`Due in ${dd} day${dd>1?"s":""}`;cls=h<=72?"warn":""}
+ // study capacity before expiry = available days x daily minutes, capped by real time left
+ let cap=0;for(let d=new Date(now.getFullYear(),now.getMonth(),now.getDate());d<=e;d.setDate(d.getDate()+1))if(!isOff(d))cap+=S.set.daily;
+ cap=Math.round(Math.min(cap,Math.max(0,ms/6e4)));const feasible=total<=cap;
+ let sc=ms<=0?5:h<=24?5:h<=72?4:h<=168?3:h<=720?1:0;
+ if(r.found)sc++;if(r.diff)sc++;if(!feasible&&ms>0)sc++;
+ const sug=done?"Low":sc>=5?"Urgent":sc>=4?"High":sc>=2?"Normal":"Low";
+ const rel=ms<=0?"has expired":h<24?`expires in ${Math.max(1,Math.round(h))} hour(s)`:`expires in ${Math.round(h/24)} day(s)`;
+ let reason;
+ if(done)reason="Completed — not counted as outstanding.";
+ else if(ms<=0)reason=`${sug} priority — expired ${fdt(e)}. Access may be gone; update the expiry if extended.`;
+ else reason=`${sug} priority — ${rel} and needs ${need} min viewing + ${total-need} min practice (${total} min). `+
+  (feasible?`About ${cap} min of study time is available before expiry, so it is feasible.`:`Only about ${cap} min of study time is available before expiry, so it cannot be fully finished unless you add time.`)+
+  (r.found?" Foundational topic.":"")+(r.diff?" Marked difficult.":"");
+ return{e,label,cls,sug,eff:r.priority||sug,need,total,h,ms,done,feasible,cap,reason};
+}
+const rank=p=>PRI.indexOf(p);
+
+/* ===== Stats, alerts ===== */
+function renderStats(){
+ const now=new Date(),R=S.recs,A=R.map(r=>an(r,now)),n=R.length,c=k=>R.filter(r=>r.status===k).length;
+ const out=R.map((r,i)=>({r,a:A[i]})).filter(x=>!x.a.done&&x.a.e);
+ const d1=out.filter(x=>x.a.ms>0&&x.a.h<=24).length,d3=out.filter(x=>x.a.ms>0&&x.a.h<=72).length;
+ const pct=n?Math.round(c("Completed")/n*100):0;
+ const nxt=out.filter(x=>x.a.ms>0).sort((a,b)=>a.a.ms-b.a.ms)[0];
+ const st=(l,v,x)=>`<div class="card stat"><span class="mut">${l}</span><b>${v}</b>${x||""}</div>`;
+ $("#stats").innerHTML=st("Total recordings",n)+st("Not started",c("Not started"))+st("In progress",c("In progress"))+st("Completed",c("Completed"))+
+  st("Expiring within 24 hours",d1)+st("Expiring within 3 days",d3)+
+  st("Next expiry",nxt?`<span class="cd" data-ms="${nxt.a.e.getTime()}">${cdown(nxt.a.ms)}</span>`:"None",nxt?`<span class="mut">${esc(nxt.r.title)}</span>`:"");
+ $("#pct").textContent=pct+"%";$("#pbar i").style.width=pct+"%";$("#pbar").setAttribute("aria-valuenow",pct);
+ // in-app alerts
+ const al=[];
+ out.filter(x=>x.a.ms<=0).forEach(x=>al.push(["bad",`Expired: ${x.r.subject} — ${x.r.title} (${fdt(x.a.e)}). Mark it completed or update the expiry.`]));
+ out.filter(x=>x.a.ms>0&&x.a.h<=24).forEach(x=>al.push(["bad",`${x.a.label}: ${x.r.subject} — ${x.r.title} (${fdt(x.a.e)})`]));
+ out.filter(x=>x.a.ms>0&&x.a.h>24&&x.a.h<=72).forEach(x=>al.push(["warn",`${x.a.label}: ${x.r.subject} — ${x.r.title}`]));
+ out.filter(x=>x.a.ms>0&&x.a.feasible===false).forEach(x=>al.push(["warn",`Not enough study time: ${x.r.title} needs ${x.a.total} min but only about ${x.a.cap} min is available before it expires.`]));
+ $("#alerts").innerHTML=al.slice(0,8).map(a=>`<div class="al ${a[0]}">${esc(a[1])}</div>`).join("")+(al.length>8?`<div class="al info">+${al.length-8} more alerts</div>`:"");
+ notifyUrgent(out.filter(x=>x.a.ms>0&&x.a.h<=24));
+ $("#demoRm").hidden=!R.some(r=>r.demo);
+}
+
+/* ===== Recording list ===== */
+function mast(r){const t=r.chk.filter(Boolean).length,ok=r.score!==""&&r.score>=S.set.bench&&t===5;
+ return`Lesson: ${r.status==="Completed"?"completed":esc(r.status.toLowerCase())}. Mastery: ${ok?(r.retest?`benchmark met (${S.set.bench}%+), retested ${esc(r.retest)} — keep checking retention`:`benchmark met, retest/retention still to confirm`):`not yet mastered (needs all 5 checks and ${S.set.bench}%+ on fresh questions)`}.`}
+function det(r){return`<details data-id="${r.id}" ${openIds.has(r.id)?"open":""}><summary>Learning checklist &amp; mastery (${r.chk.filter(Boolean).length}/5)</summary><div class="ck">${CK.map((t,i)=>`<label class="cb"><input type="checkbox" data-ck="${i}" data-id="${r.id}" ${r.chk[i]?"checked":""}> ${t}</label>`).join("")}
+ <div class="row2"><label>Practice score (%)<input type="number" min="0" max="100" data-sc data-id="${r.id}" value="${r.score}"></label><label>Latest retest date<input type="date" data-rt data-id="${r.id}" value="${esc(r.retest)}"></label></div><div class="mut">${mast(r)}</div></div></details>`}
+function ctl(r,a){return`<div class="acts">
+ ${r.url?`<a class="btn sm" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Open lesson</a>`:""}
+ ${a.done?"":`<button class="sm" data-act="done" data-id="${r.id}">Mark completed</button>`}
+ <button class="sm" data-act="edit" data-id="${r.id}">Edit</button><button class="sm dng" data-act="del" data-id="${r.id}">Delete</button></div>
+ <div class="row2"><label>Status<select data-st data-id="${r.id}">${STAT.map(s=>`<option ${s===r.status?"selected":""}>${s}</option>`).join("")}</select></label>
+ <label>Priority<select data-pr data-id="${r.id}"><option value="">Auto: ${a.sug}</option>${PRI.map(p=>`<option ${p===r.priority?"selected":""}>${p}</option>`).join("")}</select></label></div>`}
+function badges(r,a){return`<span class="badge">${esc(r.subject)}</span><span class="badge ${a.cls}">${a.label}</span><span class="badge ${a.eff==="Urgent"?"bad":a.eff==="High"?"warn":""}">${a.eff}${r.priority?" (manual)":""}</span>${r.demo?'<span class="badge warn">DEMO</span>':""}${r.found?'<span class="badge">Foundational</span>':""}${r.diff?'<span class="badge">Difficult</span>':""}`}
+function cardH(r,a){const t=r.chk.filter(Boolean).length;
+ return`<article class="card rc ${a.done?"done":""}"><div>${badges(r,a)}</div><h3>${esc(r.title)}</h3>
+ <div class="mut">Expires ${fdt(a.e)}<br><b class="cd" data-ms="${a.e?a.e.getTime():0}" data-done="${a.done?1:0}">${a.done?"Completed":cdown(a.ms)}</b></div>
+ <div class="mut">Duration: ${r.dur?r.dur+" min":"not set"} · Viewing: ${a.need} min${r.view?"":" (estimate)"}</div>
+ <div class="mut">${esc(a.reason)}</div>
+ <div><div class="mut">Checklist progress: ${t}/5 ${a.done?"· lesson completed":""}</div><div class="bar"><i style="width:${t*20}%"></i></div></div>
+ ${r.notes?`<div class="mut" style="white-space:pre-wrap">${esc(r.notes)}</div>`:""}${det(r)}${ctl(r,a)}</article>`}
+function rowH(r,a){return`<tr><td><span class="badge">${esc(r.subject)}</span>${r.demo?'<span class="badge warn">DEMO</span>':""}<br><b>${esc(r.title)}</b><div class="mut">${esc(a.reason)}</div>${r.notes?`<div class="mut" style="white-space:pre-wrap">${esc(r.notes)}</div>`:""}${det(r)}</td>
+ <td>${fdt(a.e)}</td><td><span class="badge ${a.cls}">${a.label}</span><br><b class="cd" data-ms="${a.e?a.e.getTime():0}" data-done="${a.done?1:0}">${a.done?"Completed":cdown(a.ms)}</b></td>
+ <td>${r.dur?r.dur+" min":"–"} / ${a.need} min</td><td colspan="2">${ctl(r,a)}</td></tr>`}
+function filtered(){
+ const now=new Date(),q=$("#q").value.trim().toLowerCase(),fs=$("#fSub").value,ft=$("#fSt").value,fp=$("#fPr").value,fu=$("#fUr").value;
+ let L=S.recs.map(r=>({r,a:an(r,now)})).filter(({r,a})=>{
+  if(q&&!(r.title+" "+r.notes).toLowerCase().includes(q))return false;
+  if(fs&&r.subject!==fs)return false;if(ft&&r.status!==ft)return false;if(fp&&a.eff!==fp)return false;
+  if(fu){if(a.done)return false;if(fu==="exp"&&a.ms>0)return false;if(fu==="24"&&!(a.ms>0&&a.h<=24))return false;if(fu==="72"&&!(a.ms>0&&a.h<=72))return false;
+   if(fu==="168"&&!(a.ms>0&&a.h<=168))return false;if(fu==="later"&&!(a.h>168))return false}
+  return true});
+ const s=$("#sort").value,t=x=>x.a.e?x.a.e.getTime():Infinity;
+ L.sort((x,y)=>s==="e2"?t(y)-t(x):s==="pr"?rank(x.a.eff)-rank(y.a.eff)||t(x)-t(y):s==="su"?SUBJECTS.indexOf(x.r.subject)-SUBJECTS.indexOf(y.r.subject)||t(x)-t(y):s==="st"?STAT.indexOf(x.r.status)-STAT.indexOf(y.r.status)||t(x)-t(y):t(x)-t(y));
+ return L}
+function renderList(){
+ const el=$("#list");$("#vw").value=S.view;
+ if(!S.recs.length){el.innerHTML=`<div class="card empty"><h2>Welcome! Add your first recording</h2><p class="mut">Add each lesson recording with its expiry date so the tracker can count down and plan your study time. Subjects include Sejarah and Bahasa Melayu.</p><button class="pri" data-act="add">+ Add recording</button> <button data-act="demo">Load demo recordings</button><p class="mut">Demo recordings are labelled DEMO, are not real lessons and can be removed anytime.</p></div>`;return}
+ const L=filtered();
+ if(!L.length){el.innerHTML=`<div class="card empty">No recordings match your search or filters. Clear them to see everything.</div>`;return}
+ el.innerHTML=S.view==="table"?`<div class="card tw"><table><thead><tr><th>Recording</th><th>Expiry</th><th>Countdown</th><th>Duration / viewing</th><th colspan="2">Status, priority &amp; actions</th></tr></thead><tbody>${L.map(x=>rowH(x.r,x.a)).join("")}</tbody></table></div>`:`<div class="cards">${L.map(x=>cardH(x.r,x.a)).join("")}</div>`}
+function tick(){
+ const now=Date.now();$("#clock").textContent=new Date().toLocaleString("en-MY",{weekday:"long",day:"numeric",month:"long",year:"numeric",hour:"numeric",minute:"2-digit",second:"2-digit"});
+ $$(".cd").forEach(e=>{if(e.dataset.done==="1")return;e.textContent=cdown(+e.dataset.ms-now)})}
+
+/* ===== Record actions ===== */
+const find=id=>S.recs.find(r=>r.id===id);
+function setStatus(r,s){r.status=s;if(s==="Completed"){r.chk[0]=true;S.plan=S.plan.filter(p=>p.recId!==r.id)}}
+function changed(){persist();refresh()}
+function refresh(){renderStats();renderList();renderPlan();fillAddSel()}
+$("#list").addEventListener("click",async e=>{
+ const b=e.target.closest("[data-act]");if(!b)return;const act=b.dataset.act,r=find(b.dataset.id);
+ if(act==="add")openForm();else if(act==="demo")loadDemo();
+ else if(act==="edit"&&r)openForm(r);
+ else if(act==="done"&&r){setStatus(r,"Completed");changed();toast("Marked as completed.")}
+ else if(act==="del"&&r&&await ask(`Delete "${r.title}"? This cannot be undone.`,"Delete")){S.recs=S.recs.filter(x=>x!==r);S.plan=S.plan.filter(p=>p.recId!==r.id);changed();toast("Recording deleted.")}});
+$("#list").addEventListener("change",e=>{const t=e.target,r=find(t.dataset.id);if(!r)return;
+ if("st" in t.dataset)setStatus(r,t.value);else if("pr" in t.dataset)r.priority=t.value;
+ else if("ck" in t.dataset)r.chk[+t.dataset.ck]=t.checked;
+ else if("sc" in t.dataset){const v=t.value===""?"":Math.min(100,Math.max(0,Number(t.value)));r.score=isNaN(v)?"":v}
+ else if("rt" in t.dataset)r.retest=pday(t.value)?t.value:"";else return;changed()});
+$("#list").addEventListener("toggle",e=>{const d=e.target;if(d.tagName==="DETAILS"&&d.dataset.id)d.open?openIds.add(d.dataset.id):openIds.delete(d.dataset.id)},true);
+["q","fSub","fSt","fPr","fUr","sort"].forEach(i=>$("#"+i).addEventListener("input",renderList));
+$("#vw").addEventListener("change",e=>{S.view=e.target.value==="table"?"table":"cards";persist();renderList()});
+
+/* ===== Add / edit form ===== */
+let autoView=true;
+function openForm(r){
+ $("#fErr").textContent="";$("#fTitle").textContent=r?"Edit recording":"Add recording";$("#fId").value=r?r.id:"";
+ const e=r&&pdt(r.expiry);
+ $("#sub").value=r?r.subject:"Maths";$("#ti").value=r?r.title:"";$("#ur").value=r?r.url:"";$("#ed").value=e?r.expiry.slice(0,10):"";$("#et").value=e?r.expiry.slice(11):"";
+ $("#du").value=r&&r.dur||"";$("#vi").value=r&&r.view||"";$("#st").value=r?r.status:"Not started";$("#pr").value=r?r.priority:"";
+ $("#fo").checked=!!(r&&r.found);$("#di").checked=!!(r&&r.diff);$("#no").value=r?r.notes:"";autoView=!r||!r.view||r.view===r.dur;sejHint();$("#fSave").disabled=false;$("#dlgF").showModal()}
+function sejHint(){$("#sejHint").hidden=$("#sub").value!=="Sejarah"}
+$("#sub").addEventListener("change",sejHint);
+$("#sejTpl").onclick=()=>{const n=$("#no");n.value=(n.value?n.value+"\n\n":"")+SEJ_TPL;n.focus()};
+$("#du").addEventListener("input",()=>{if(autoView)$("#vi").value=$("#du").value});$("#vi").addEventListener("input",()=>autoView=false);
+$("#addBtn").onclick=()=>openForm();$("#fCancel").onclick=()=>$("#dlgF").close();
+$("#fm").addEventListener("submit",ev=>{ev.preventDefault();const err=m=>{$("#fErr").textContent=m;return false};
+ const id=$("#fId").value,title=$("#ti").value.trim(),ed=$("#ed").value,et=$("#et").value||"23:59",st=$("#st").value;
+ if(!title)return err("Enter a recording or chapter name.");
+ if(!pday(ed))return err("Choose a valid expiry date.");
+ const expiry=`${ed}T${et}`,e=pdt(expiry);if(!e)return err("The expiry time is not valid.");
+ if(e<new Date()&&st!=="Completed")return err("That expiry is already in the past. Pick a future date or set status to Completed.");
+ const url=$("#ur").value.trim();if(url&&!/^https?:\/\/\S+$/i.test(url))return err("The URL must start with http:// or https://.");
+ const dur=$("#du").value===""?null:posInt($("#du").value),vi=$("#vi").value===""?null:posInt($("#vi").value);
+ if($("#du").value!==""&&!dur)return err("Duration must be a positive whole number of minutes.");
+ if($("#vi").value!==""&&!vi)return err("Estimated viewing time must be a positive whole number of minutes.");
+ const sub=$("#sub").value;
+ if(S.recs.some(r=>r.id!==id&&r.subject===sub&&r.title.toLowerCase()===title.toLowerCase()&&r.expiry===expiry))return err("This recording already exists with the same subject, name and expiry.");
+ $("#fSave").disabled=true;
+ let r=id&&find(id);const isNew=!r;if(isNew){r=norm({id:uid()});S.recs.push(r)}
+ Object.assign(r,{subject:sub,title:title.slice(0,200),url,expiry,dur,view:vi,priority:$("#pr").value,found:$("#fo").checked,diff:$("#di").checked,notes:$("#no").value.trim()});
+ setStatus(r,st);if(st!=="Completed"&&!isNew&&r.status!==st)r.status=st;
+ $("#dlgF").close();changed();const a=an(r);toast((isNew?"Recording saved. ":"Changes saved. ")+a.reason)});
+
+/* ===== Demo data ===== */
+function loadDemo(){const n=new Date(),at=(h)=>{const d=new Date(n.getTime()+h*36e5);return`${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`};
+ [["Sejarah","Bab 1 Warisan Negara Bangsa (demo)",20,45,1,1,"Key events, key figures, dates. Practise one KBAT question."],["Add Maths","Differentiation (demo)",52,60,1,1,""],["Physics","Form 4 Forces and Motion (demo)",480,50,1,0,""],["Bahasa Melayu","Karangan Perbincangan (demo)",110,40,0,1,"Essay practice"]]
+ .forEach(x=>S.recs.push(norm({subject:x[0],title:"[DEMO] "+x[1],expiry:at(x[2]),dur:x[3],view:x[3],found:x[4],diff:x[5],notes:x[6],demo:true})));changed();toast("Demo recordings loaded. They are not real lessons.")}
+$("#demoRm").onclick=async()=>{if(await ask("Remove all demo recordings?","Remove")){const ids=S.recs.filter(r=>r.demo).map(r=>r.id);S.recs=S.recs.filter(r=>!r.demo);S.plan=S.plan.filter(p=>!ids.includes(p.recId));changed()}};
+
+/* ===== Weekly planner ===== */
+function generate(){
+ const now=new Date(),S0=S.set,startMin=tmin(S0.start),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ const items=S.recs.map(r=>({r,a:an(r,now)})).filter(x=>!x.a.done&&x.a.e&&x.a.ms>0);
+ // recordings expiring within 7 days go first (by expiry); others follow by priority then expiry
+ items.sort((x,y)=>{const ux=x.a.h<=168?0:1,uy=y.a.h<=168?0:1;return ux-uy||(ux===0?x.a.ms-y.a.ms:rank(x.a.eff)-rank(y.a.eff)||x.a.ms-y.a.ms)});
+ const used={},cur={},out=[];
+ for(const {r,a} of items){let rv=a.need,rp=Math.round(a.need*S0.practice/100);
+  for(let i=0;i<80&&rv+rp>0;i++){
+   const d=new Date(today);d.setDate(d.getDate()+i);if(isOff(d))continue;const k=ymd(d),u=used[k]||0;if(S0.daily-u<15)continue;
+   let c=cur[k]??startMin;if(i===0)c=Math.max(c,Math.ceil((now.getHours()*60+now.getMinutes()+5)/5)*5);
+   const len=Math.min(S0.maxSess,rv+rp,S0.daily-u);
+   if(d.getDay()===1&&c<1320&&c+len>1260)c=1320;     // never overlap Monday 9–10 PM class
+   if(c+len>1380)continue;                           // nothing after 11 PM
+   const vm=Math.min(rv,len),pm=Math.min(rp,len-vm);
+   out.push({id:uid(),recId:r.id,date:k,start:c,vm,pm});rv-=vm;rp-=pm;used[k]=u+len;cur[k]=c+len+S0.brk}}
+ S.plan=out;changed();toast(out.length?"Plan generated. Edit any session below.":"No outstanding recordings to schedule.")}
+function planInfo(r,a){const ss=S.plan.filter(p=>p.recId===r.id);
+ const vm=ss.reduce((s,p)=>s+p.vm,0),pm=ss.reduce((s,p)=>s+p.pm,0);
+ const end=ss.reduce((m,p)=>{const d=pday(p.date);return d?Math.max(m,d.getTime()+(p.start+p.vm+p.pm)*6e4):m},0);
+ return{ss,vm,pm,end,met:ss.length>0&&vm>=a.need&&end<=a.e.getTime()}}
+function fillAddSel(){const s=$("#addSel"),v=s.value;s.innerHTML=S.recs.filter(r=>r.status!=="Completed").map(r=>`<option value="${r.id}">${esc(r.subject)}: ${esc(r.title)}</option>`).join("")||"<option value=''>No outstanding recordings</option>";s.value=v}
+function monday(off){const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7)+off*7);return d}
+function renderPlan(){
+ const now=new Date(),out=S.recs.map(r=>({r,a:an(r,now)})).filter(x=>!x.a.done&&x.a.e);
+ const lines=[];
+ const late=out.filter(x=>x.a.ms>0&&!planInfo(x.r,x.a).met).sort((x,y)=>x.a.ms-y.a.ms);
+ const exp=out.filter(x=>x.a.ms<=0);
+ const wk7=out.filter(x=>x.a.ms>0&&x.a.h<=168),need7=wk7.reduce((s,x)=>s+x.a.total,0);let cap7=0;
+ for(let i=0;i<7;i++){const d=new Date();d.setDate(d.getDate()+i);if(!isOff(d))cap7+=S.set.daily}
+ if(need7>cap7)lines.push(`<div class="al bad">Not enough time: recordings expiring within 7 days need about ${need7} min (viewing + practice) but only about ${cap7} min is available in the next 7 days. You cannot finish everything — see the priority list below.</div>`);
+ if(late.length)lines.push(`<div class="al warn"><b>Deadline will NOT be met in the current plan for:</b><br>${late.map(x=>`${esc(x.r.title)} (${esc(x.a.label.toLowerCase())})`).join("<br>")}<br><b>Prioritise first:</b> ${late.slice(0,3).map(x=>esc(x.r.title)).join(" → ")}. Generate a plan, add study time in Settings, or drop lower-value lessons.</div>`);
+ if(exp.length)lines.push(`<div class="al info">${exp.length} outstanding recording(s) have already expired and are not scheduled.</div>`);
+ if(!late.length&&!exp.length&&out.length&&S.plan.length&&need7<=cap7)lines.push(`<div class="al info">All outstanding recordings are scheduled before their deadlines. Remember to retest topics 3–7 days later.</div>`);
+ if(!out.length)lines.push(`<div class="al info">No outstanding recordings to plan.</div>`);
+ $("#planWarn").innerHTML=lines.join("");
+ const m=monday(wkOff),e=new Date(m);e.setDate(e.getDate()+6);
+ $("#wkTitle").textContent=`Week of ${m.toLocaleDateString("en-MY",{day:"numeric",month:"short"})} – ${e.toLocaleDateString("en-MY",{day:"numeric",month:"short",year:"numeric"})}`;
+ const k0=ymd(m),k1=ymd(e),wk=S.plan.filter(p=>p.date>=k0&&p.date<=k1).sort((a,b)=>a.date.localeCompare(b.date)||a.start-b.start);
+ const bad=new Set();wk.forEach((p,i)=>{const d=pday(p.date),en=p.start+p.vm+p.pm;
+  if(isOff(d))bad.add(p.id+"off");if(d.getDay()===1&&p.start<1320&&en>1260)bad.add(p.id+"mon");
+  wk.forEach((q,j)=>{if(i!==j&&p.date===q.date&&p.start<q.start+q.vm+q.pm&&q.start<en)bad.add(p.id+"ov")})});
+ $("#planRows").innerHTML=wk.map(p=>{const r=find(p.recId),a=r&&an(r,now),pi=r&&a.e?planInfo(r,a):null,en=p.start+p.vm+p.pm;
+  const flags=(bad.has(p.id+"ov")?"<br>⚠ Overlaps another session":"")+(bad.has(p.id+"mon")?"<br>⚠ Clashes with Monday 9–10 PM class":"")+(bad.has(p.id+"off")?"<br>⚠ Unavailable day":"");
+  return`<tr><td><b>${esc(r?r.title:"(deleted)")}</b><div class="mut">${esc(r?r.subject:"")}</div><span class="err">${flags}</span></td>
+  <td><input type="date" data-pf="date" data-id="${p.id}" value="${p.date}" aria-label="Date"></td><td><input type="time" data-pf="start" data-id="${p.id}" value="${hm(p.start)}" aria-label="Start time"></td><td>${hm(en)}</td>
+  <td><input type="number" min="0" data-pf="vm" data-id="${p.id}" value="${p.vm}" aria-label="Viewing minutes"></td><td><input type="number" min="0" data-pf="pm" data-id="${p.id}" value="${p.pm}" aria-label="Practice minutes"></td>
+  <td>${pi?`<span class="badge ${pi.met?"ok":"bad"}">${pi.met?"Deadline met":"Deadline NOT met"}</span>`:""}</td><td><button class="sm dng" data-pd="${p.id}">Remove</button></td></tr>`}).join("");
+ $("#planNone").textContent=wk.length?"Breaks of "+S.set.brk+" min are left between generated sessions.":(S.plan.length?"No sessions this week. Use the week buttons to look elsewhere.":"No plan yet. Press Generate plan or add a session manually.")}
+$("#planRows").addEventListener("change",e=>{const t=e.target,p=S.plan.find(x=>x.id===t.dataset.id);if(!p)return;const f=t.dataset.pf;
+ if(f==="date"&&pday(t.value))p.date=t.value;else if(f==="start"&&tmin(t.value)!=null)p.start=tmin(t.value);else if(f==="vm"||f==="pm")p[f]=Math.max(0,parseInt(t.value,10)||0);persist();renderPlan()});
+$("#planRows").addEventListener("click",e=>{const id=e.target.dataset.pd;if(id){S.plan=S.plan.filter(p=>p.id!==id);persist();renderPlan()}});
+$("#genBtn").onclick=async()=>{if(!S.plan.length||await ask("Replace the current plan (including your manual edits) with a new generated plan?","Replace plan"))generate()};
+$("#addSess").onclick=()=>{const r=find($("#addSel").value);if(!r)return toast("Add an outstanding recording first.");const a=an(r),d=new Date();
+ S.plan.push({id:uid(),recId:r.id,date:ymd(d),start:tmin(S.set.start),vm:Math.min(a.need,S.set.maxSess),pm:0});persist();wkOff=0;renderPlan();toast("Session added for today. Edit its date and time.")};
+$("#wkPrev").onclick=()=>{wkOff--;renderPlan()};$("#wkNext").onclick=()=>{wkOff++;renderPlan()};
+
+/* ===== Settings ===== */
+function renderSettings(){$$("[data-s]").forEach(i=>{const k=i.dataset.s;i.value=k==="offDates"?S.set.offDates.join("\n"):S.set[k]});
+ $("#offDays").innerHTML=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d,i)=>`<label class="cb"><input type="checkbox" data-od="${i}" ${S.set.offDays.includes(i)?"checked":""}> ${d}</label>`).join("")}
+$("#tab-set").addEventListener("change",e=>{const t=e.target;
+ if(t.dataset.od!==undefined){const i=+t.dataset.od;S.set.offDays=S.set.offDays.filter(x=>x!==i);if(t.checked)S.set.offDays.push(i)}
+ else if(t.dataset.s){const k=t.dataset.s;if(k==="offDates"){S.set.offDates=t.value.split(/[\s,]+/).filter(x=>pday(x))}else{const c=normSet({...S.set,[k]:t.value});S.set[k]=c[k]}}
+ else return;persist();renderSettings();refresh()});
+
+/* ===== Export / import / reset ===== */
+function dl(name,text,type){const a=document.createElement("a"),u=URL.createObjectURL(new Blob([text],{type}));a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)}
+$("#exJ").onclick=()=>{dl(`recording-tracker-backup-${ymd(new Date())}.json`,JSON.stringify(S,null,2),"application/json");toast("JSON backup exported.")};
+$("#exC").onclick=()=>{const q=v=>{let s=String(v??"");if(/^[=+\-@\t\r]/.test(s))s="'"+s;return`"${s.replace(/"/g,'""')}"`};
+ const h=["Subject","Title","URL","Expiry","Duration (min)","Viewing (min)","Status","Priority","Suggested priority","Foundational","Difficult","Checklist done","Score %","Last retest","Demo","Notes"];
+ const rows=S.recs.map(r=>{const a=an(r);return[r.subject,r.title,r.url,r.expiry.replace("T"," "),r.dur||"",r.view||"",r.status,a.eff,a.sug,r.found?"Yes":"No",r.diff?"Yes":"No",r.chk.filter(Boolean).length+"/5",r.score,r.retest,r.demo?"Yes":"No",r.notes].map(q).join(",")});
+ dl(`recordings-${ymd(new Date())}.csv`,"\ufeff"+[h.map(q).join(","),...rows].join("\r\n"),"text/csv;charset=utf-8");toast("CSV exported.")};
+$("#imB").onclick=()=>$("#imF").click();
+$("#imF").addEventListener("change",async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+ try{const j=JSON.parse(await f.text());if(!j||!Array.isArray(j.recs))throw 0;
+  if(!await ask(`Import ${j.recs.length} recording(s)? This replaces your current data.`,"Import"))return;apply(j);persist();renderSettings();refresh();toast("Data imported.")}
+ catch(x){toast("That file is not a valid tracker JSON backup. Nothing was changed.")}});
+$("#rst").onclick=async()=>{if(await ask("Reset ALL data? Recordings, settings and plans will be erased. Export a JSON backup first if unsure.","Reset all data")){
+ S={recs:[],plan:[],set:{...DEF},view:"cards"};try{localStorage.removeItem(KEY)}catch(e){}persist();renderSettings();refresh();toast("All data reset.")}};
+
+/* ===== Notifications (only while the page is open) ===== */
+function notiState(){const s=$("#notiState"),b=$("#notiBtn");
+ if(!("Notification"in window)){b.disabled=true;s.textContent="Not supported in this browser (iPhone Safari needs the page added to the Home Screen). In-app alerts still work.";return}
+ s.textContent={granted:"Enabled while this page is open.",denied:"Blocked in browser settings. In-app alerts still work.",default:"Not enabled yet."}[Notification.permission]}
+$("#notiBtn").onclick=async()=>{try{await Notification.requestPermission()}catch(e){}notiState();renderStats()};
+function notifyUrgent(L){try{if(!("Notification"in window)||Notification.permission!=="granted"||!L.length||sessionStorage.getItem("notified"))return;
+ sessionStorage.setItem("notified","1");new Notification("Recordings expiring within 24 hours",{body:L.slice(0,3).map(x=>x.r.title).join("; ")})}catch(e){}}
+
+/* ===== Init ===== */
+$$("nav button").forEach(b=>b.onclick=()=>{$$("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));["rec","plan","set"].forEach(t=>$("#tab-"+t).hidden=t!==b.dataset.tab)});
+const opts=SUBJECTS.map(s=>`<option>${s}</option>`).join("");$("#sub").innerHTML=opts;$("#fSub").innerHTML="<option value=''>All subjects</option>"+opts;
+load();renderSettings();notiState();persist();refresh();tick();
+setInterval(tick,1000);
+setInterval(()=>{renderStats();if(!$("#list").contains(document.activeElement))renderList();renderPlan()},60000); // recalculate urgency every minute
+</script>
+</body>
+</html>
